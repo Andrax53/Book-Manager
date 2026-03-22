@@ -1,69 +1,71 @@
 <template>
-  <div class="app">
-    <header>
-      <h1>Менеджер книг</h1>
-      <p>Управляй своей библиотекой</p>
+  <div class="container mt-5">
+    <header class="text-center mb-5 p-4 rounded-4 text-white" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+      <h1 class="display-4">Менеджер книг</h1>
+      <p class="lead">Vue 3 + Bootstrap 5</p>
     </header>
 
-    <main>
-      <AddBookForm @add-book="addBook" />
+    <AddBookForm @add-book="addBook" />
 
-      <BookFilters
-          v-model:searchQuery="searchQuery"
-          v-model:filter="currentFilter"
-          :books="books"
-      />
+    <BookFilters
+        v-model:searchQuery="searchQuery"
+        v-model:filter="currentFilter"
+        :books="books"
+    />
 
-      <div v-if="filteredBooks.length === 0" class="empty-state">
-        <p>Книги не найдены :(</p>
-        <p>Добавьте первую книгу или измените параметры поиска</p>
+    <!-- Сортировка (новое из практики 15) -->
+    <div class="row mb-4">
+      <div class="col-md-4">
+        <select v-model="sortType" class="form-select form-select-lg">
+          <option value="newest">Новые сверху</option>
+          <option value="title">По названию (A-Z)</option>
+          <option value="rating">По рейтингу (высокий сначала)</option>
+        </select>
       </div>
+    </div>
 
-      <div v-else class="books-list">
+    <div v-if="displayedBooks.length === 0" class="alert alert-info text-center">
+      Книги не найдены. Добавьте первую книгу!
+    </div>
+
+    <div class="row">
+      <div v-for="book in displayedBooks" :key="book.id" class="col-lg-4 col-md-6 mb-4">
         <BookCard
-            v-for="book in filteredBooks"
-            :key="book.id"
             :book="book"
             @toggle="toggleBook(book.id)"
             @delete="deleteBook(book.id)"
             @rate="rateBook(book.id, $event)"
         />
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import {ref, computed, watch} from 'vue'
 import AddBookForm from './components/AddBookForm.vue'
 import BookFilters from './components/BookFilters.vue'
 import BookCard from './components/BookCard.vue'
 
-// Состояние книг с загрузкой из localStorage
 const books = ref([])
+const saved = localStorage.getItem('books')
+if (saved) books.value = JSON.parse(saved)
 
-const savedBooks = localStorage.getItem('books')
-if (savedBooks) {
-  books.value = JSON.parse(savedBooks)
-}
-
-// Состояния фильтрации
 const currentFilter = ref('all')
 const searchQuery = ref('')
+const sortType = ref('newest')
 
-// Сохранение изменений
-watch(books, (newBooks) => {
-  localStorage.setItem('books', JSON.stringify(newBooks))
-}, { deep: true })
+watch(books, (newVal) => {
+  localStorage.setItem('books', JSON.stringify(newVal))
+}, {deep: true})
 
 const addBook = (bookData) => {
-  const newBook = {
+  books.value.push({
     id: Date.now(),
     ...bookData,
     completed: false,
     rating: 0
-  }
-  books.value.push(newBook)
+  })
 }
 
 const toggleBook = (id) => {
@@ -76,9 +78,7 @@ const toggleBook = (id) => {
 
 const rateBook = (id, rating) => {
   const book = books.value.find(b => b.id === id)
-  if (book && book.completed) {
-    book.rating = rating
-  }
+  if (book && book.completed) book.rating = rating
 }
 
 const deleteBook = (id) => {
@@ -87,60 +87,30 @@ const deleteBook = (id) => {
   }
 }
 
+// Фильтрация (из 14)
 const filteredBooks = computed(() => {
-  return books.value
-      .filter(book => {
-        if (currentFilter.value === 'unread') return !book.completed
-        if (currentFilter.value === 'read') return book.completed
-        return true
-      })
-      .filter(book => {
-        if (!searchQuery.value) return true
-        const query = searchQuery.value.toLowerCase()
-        return book.title.toLowerCase().includes(query) ||
-            book.author.toLowerCase().includes(query)
-      })
+  return books.value.filter(book => {
+    if (currentFilter.value === 'unread') return !book.completed
+    if (currentFilter.value === 'read') return book.completed
+    return true
+  }).filter(book => {
+    if (!searchQuery.value) return true
+    const q = searchQuery.value.toLowerCase()
+    return book.title.toLowerCase().includes(q) ||
+        book.author.toLowerCase().includes(q)
+  })
+})
+
+// Сортировка (новое из 15)
+const displayedBooks = computed(() => {
+  let list = [...filteredBooks.value]
+  if (sortType.value === 'title') {
+    list.sort((a, b) => a.title.localeCompare(b.title))
+  } else if (sortType.value === 'rating') {
+    list.sort((a, b) => (b.rating || 0) - (a.rating || 0))
+  } else {
+    list.sort((a, b) => b.id - a.id) // новые сверху
+  }
+  return list
 })
 </script>
-
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #f0f2f5;
-  line-height: 1.6;
-}
-
-.app { max-width: 800px; margin: 0 auto; padding: 20px; }
-
-header {
-  text-align: center;
-  margin-bottom: 30px;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-header h1 { font-size: 2.5em; margin-bottom: 5px; }
-
-main {
-  background: white;
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px;
-  color: #999;
-  font-size: 1.2em;
-}
-
-.empty-state p:first-child { font-size: 3em; margin-bottom: 20px; }
-
-.books-list { margin-top: 20px; }
-</style>
